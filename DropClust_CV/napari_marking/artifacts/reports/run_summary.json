@@ -1,0 +1,99 @@
+{
+  "project_dir": "/Users/tmwo0dsvert3/Desktop/Point_mark/napari_marking",
+  "video": "/Users/tmwo0dsvert3/Desktop/Point_mark/napari_marking/data/raw/input.avi",
+  "fps": 10.0,
+  "frame_count": 89,
+  "detector_params": {
+    "small_sigma": 1.2,
+    "big_sigma": 11.0,
+    "threshold_abs": 20.5,
+    "min_distance": 5,
+    "min_net_intensity_p90": 29.0,
+    "min_net_intensity_mean": 11.0
+  },
+  "selection_metric": "balanced",
+  "measurement_params": {
+    "signal_radius": 4,
+    "background_radius": 9
+  },
+  "tracking_params": {
+    "max_distance": 10.0,
+    "max_gap": 3,
+    "min_track_length": 1
+  },
+  "recovery_params": {
+    "enabled": true,
+    "threshold_margin": 1.0,
+    "p90_margin": 5.0,
+    "mean_margin": 3.0,
+    "same_frame_radius": 2.0,
+    "temporal_radius": 10.0
+  },
+  "intensity_thresholds": {
+    "low_threshold": 42.80000000000001,
+    "high_threshold": 52.60000000000002
+  },
+  "detections_total": 7554,
+  "tracks_total": 560,
+  "evaluation": {
+    "precision": 0.9156769596199525,
+    "recall": 0.8380434782608696,
+    "f1": 0.8751418842224744,
+    "tp": 771,
+    "fp": 71,
+    "fn": 149,
+    "count_mae": 9.0,
+    "annotated_frames": 10
+  },
+  "qc": {
+    "overlay_video": "/Users/tmwo0dsvert3/Desktop/Point_mark/napari_marking/artifacts/qc/qc_overlay.mp4",
+    "problem_frames_csv": "/Users/tmwo0dsvert3/Desktop/Point_mark/napari_marking/artifacts/tables/qc_problem_frames.csv",
+    "top_problem_frames": [
+      {
+        "frame": 10,
+        "predicted_count": 87,
+        "truth_count": 108,
+        "tp": 83,
+        "fp": 4,
+        "fn": 25,
+        "error_score": 29
+      },
+      {
+        "frame": 0,
+        "predicted_count": 87,
+        "truth_count": 98,
+        "tp": 80,
+        "fp": 7,
+        "fn": 18,
+        "error_score": 25
+      },
+      {
+        "frame": 80,
+        "predicted_count": 62,
+        "truth_count": 68,
+        "tp": 53,
+        "fp": 9,
+        "fn": 15,
+        "error_score": 24
+      },
+      {
+        "frame": 88,
+        "predicted_count": 77,
+        "truth_count": 94,
+        "tp": 74,
+        "fp": 3,
+        "fn": 20,
+        "error_score": 23
+      },
+      {
+        "frame": 50,
+        "predicted_count": 91,
+        "truth_count": 88,
+        "tp": 78,
+        "fp": 13,
+        "fn": 10,
+        "error_score": 23
+      }
+    ]
+  }
+}

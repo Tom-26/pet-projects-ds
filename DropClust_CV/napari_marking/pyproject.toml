@@ -1,0 +1,14 @@
+[project]
+name = "napari-marking"
+version = "0.1.0"
+description = "Droplet detection, tracking and glow quantification pipeline."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "napari",
+    "numpy",
+    "opencv-python",
+    "pandas",
+    "scikit-image",
+    "scipy",
+]
