@@ -1,0 +1,10 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+*.avi
+*.mp4
+*.mov
+*.zip
+DropClust_CV/napari_marking/data/raw/
