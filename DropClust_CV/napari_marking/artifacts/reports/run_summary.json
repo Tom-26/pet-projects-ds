@@ -8,8 +8,8 @@
     "big_sigma": 11.0,
     "threshold_abs": 20.5,
     "min_distance": 5,
-    "min_net_intensity_p90": 29.0,
-    "min_net_intensity_mean": 11.0
+    "min_net_intensity_p90": 31.0,
+    "min_net_intensity_mean": 9.0
   },
   "selection_metric": "balanced",
   "measurement_params": {
@@ -30,69 +30,69 @@
     "temporal_radius": 10.0
   },
   "intensity_thresholds": {
-    "low_threshold": 42.80000000000001,
-    "high_threshold": 52.60000000000002
+    "low_threshold": 42.19999999999999,
+    "high_threshold": 52.0
   },
-  "detections_total": 7554,
-  "tracks_total": 560,
+  "detections_total": 7840,
+  "tracks_total": 615,
   "evaluation": {
-    "precision": 0.9156769596199525,
-    "recall": 0.8380434782608696,
-    "f1": 0.8751418842224744,
-    "tp": 771,
-    "fp": 71,
-    "fn": 149,
-    "count_mae": 9.0,
-    "annotated_frames": 10
+    "precision": 0.8832335329341318,
+    "recall": 0.8516780945507038,
+    "f1": 0.8671688407128422,
+    "tp": 2360,
+    "fp": 312,
+    "fn": 411,
+    "count_mae": 6.633333333333334,
+    "annotated_frames": 30
   },
   "qc": {
     "overlay_video": "/Users/tmwo0dsvert3/Desktop/Point_mark/napari_marking/artifacts/qc/qc_overlay.mp4",
     "problem_frames_csv": "/Users/tmwo0dsvert3/Desktop/Point_mark/napari_marking/artifacts/tables/qc_problem_frames.csv",
     "top_problem_frames": [
       {
-        "frame": 10,
-        "predicted_count": 87,
-        "truth_count": 108,
-        "tp": 83,
-        "fp": 4,
-        "fn": 25,
-        "error_score": 29
-      },
-      {
-        "frame": 0,
-        "predicted_count": 87,
-        "truth_count": 98,
-        "tp": 80,
-        "fp": 7,
-        "fn": 18,
-        "error_score": 25
+        "frame": 9,
+        "predicted_count": 89,
+        "truth_count": 89,
+        "tp": 70,
+        "fp": 19,
+        "fn": 19,
+        "error_score": 38
       },
       {
         "frame": 80,
-        "predicted_count": 62,
+        "predicted_count": 68,
         "truth_count": 68,
-        "tp": 53,
-        "fp": 9,
-        "fn": 15,
-        "error_score": 24
+        "tp": 51,
+        "fp": 17,
+        "fn": 17,
+        "error_score": 34
       },
       {
-        "frame": 88,
-        "predicted_count": 77,
-        "truth_count": 94,
-        "tp": 74,
-        "fp": 3,
-        "fn": 20,
-        "error_score": 23
+        "frame": 53,
+        "predicted_count": 83,
+        "truth_count": 87,
+        "tp": 69,
+        "fp": 14,
+        "fn": 18,
+        "error_score": 32
       },
       {
-        "frame": 50,
+        "frame": 10,
         "predicted_count": 91,
-        "truth_count": 88,
-        "tp": 78,
-        "fp": 13,
-        "fn": 10,
-        "error_score": 23
+        "truth_count": 108,
+        "tp": 84,
+        "fp": 7,
+        "fn": 24,
+        "error_score": 31
+      },
+      {
+        "frame": 52,
+        "predicted_count": 88,
+        "truth_count": 114,
+        "tp": 86,
+        "fp": 2,
+        "fn": 28,
+        "error_score": 30
       }
     ]
   }

@@ -1,0 +1,16 @@
+[
+  {
+    "job_name": "input",
+    "video": "/Users/tmwo0dsvert3/Desktop/Point_mark/napari_marking/mlops/input/videos/input.avi",
+    "annotation": "",
+    "status": "ok",
+    "return_code": 0,
+    "mode": "balanced",
+    "output_dir": "/Users/tmwo0dsvert3/Desktop/Point_mark/napari_marking/mlops/output/input",
+    "detections_total": 7612,
+    "tracks_total": 580,
+    "precision": null,
+    "recall": null,
+    "f1": null
+  }
+]

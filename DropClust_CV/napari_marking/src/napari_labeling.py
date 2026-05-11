@@ -151,6 +151,40 @@ def save_points(points: np.ndarray, output_dir: Path) -> None:
     print(f"Points saved: {len(df)}")
 
 
+def load_existing_points() -> np.ndarray:
+    """
+    Load existing annotations so labeling can continue from previous work.
+    """
+    if OUTPUT_POINTS_NPY.exists():
+        points = np.load(OUTPUT_POINTS_NPY)
+        points = np.asarray(points, dtype=float)
+        if points.size == 0:
+            return np.empty((0, 3), dtype=float)
+        return points.reshape(-1, 3)
+
+    if OUTPUT_POINTS_CSV.exists():
+        df = pd.read_csv(OUTPUT_POINTS_CSV)
+        if df.empty:
+            return np.empty((0, 3), dtype=float)
+        return df[["frame", "y", "x"]].to_numpy(dtype=float)
+
+    return np.empty((0, 3), dtype=float)
+
+
+def summarize_existing_points(points: np.ndarray) -> None:
+    if points.size == 0:
+        print("Existing annotations: none")
+        return
+
+    frame_ids = sorted({int(round(point[0])) for point in points})
+    preview_frames = ", ".join(str(frame_id) for frame_id in frame_ids[:12])
+    if len(frame_ids) > 12:
+        preview_frames += ", ..."
+
+    print(f"Existing annotations loaded: {len(points)} points")
+    print(f"Annotated frames: {preview_frames}")
+
+
 
 def save_preview_image(
     frames: np.ndarray,
@@ -186,6 +220,38 @@ def save_preview_image(
     print(f"Saved preview: {preview_path}")
 
 
+def extract_points_from_viewer(
+    viewer: napari.Viewer,
+    points_layer,
+) -> np.ndarray:
+    """
+    Return point data robustly even if the layer was renamed in the UI.
+    """
+    try:
+        return np.asarray(points_layer.data)
+    except Exception:
+        pass
+
+    try:
+        return np.asarray(viewer.layers[POINTS_LAYER_NAME].data)
+    except KeyError:
+        pass
+
+    for layer in viewer.layers:
+        if isinstance(layer, napari.layers.Points):
+            print(
+                "Warning: layer 'manual_points' was not found by name. "
+                f"Using points layer '{layer.name}' instead."
+            )
+            return np.asarray(layer.data)
+
+    print(
+        "Warning: no points layer was found after closing napari. "
+        "Saving an empty annotation file."
+    )
+    return np.empty((0, 3), dtype=float)
+
+
 # ============================================================
 # Main marking app
 # ============================================================
@@ -194,12 +260,15 @@ def save_preview_image(
 def main() -> None:
     frames = load_video_grayscale(VIDEO_PATH)
     filtered = make_bandpass_video(frames)
+    existing_points = load_existing_points()
 
     print(f"Video loaded: {VIDEO_PATH}")
     print(f"Frames shape: {frames.shape}")
     print("Napari point format: [frame, y, x]")
     print("Use layer 'manual_points' and point-add mode to mark real spots.")
+    print("Existing annotations are loaded automatically if they already exist.")
     print("After closing napari, points will be saved automatically.")
+    summarize_existing_points(existing_points)
 
     viewer = napari.Viewer()
 
@@ -220,6 +289,7 @@ def main() -> None:
     )
 
     points_layer = viewer.add_points(
+        data=existing_points,
         name=POINTS_LAYER_NAME,
         size=POINT_SIZE,
         face_color="red",
@@ -230,7 +300,7 @@ def main() -> None:
 
     napari.run()
 
-    points = viewer.layers[POINTS_LAYER_NAME].data
+    points = extract_points_from_viewer(viewer, points_layer)
 
     save_points(points, ANNOTATIONS_DIR)
 
