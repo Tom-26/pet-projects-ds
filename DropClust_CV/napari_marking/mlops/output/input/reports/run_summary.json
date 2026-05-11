@@ -1,0 +1,93 @@
+{
+  "project_dir": "/Users/tmwo0dsvert3/Desktop/Point_mark/napari_marking",
+  "video": "/Users/tmwo0dsvert3/Desktop/Point_mark/napari_marking/mlops/input/videos/input.avi",
+  "fps": 10.0,
+  "frame_count": 89,
+  "mode": "balanced",
+  "detector_params": {
+    "small_sigma": 1.2,
+    "big_sigma": 11.0,
+    "threshold_abs": 20.5,
+    "min_distance": 5,
+    "min_net_intensity_p90": 31.0,
+    "min_net_intensity_mean": 9.0
+  },
+  "mode_details": {
+    "mode": "balanced",
+    "baseline_params": {
+      "small_sigma": 1.2,
+      "big_sigma": 11.0,
+      "threshold_abs": 20.5,
+      "min_distance": 5,
+      "min_net_intensity_p90": 31.0,
+      "min_net_intensity_mean": 9.0
+    },
+    "background_subtracted_params": {
+      "small_sigma": 1.2,
+      "big_sigma": 9.0,
+      "threshold_abs": 20.0,
+      "min_distance": 5,
+      "min_net_intensity_p90": 27.0,
+      "min_net_intensity_mean": 9.0
+    },
+    "rescoring_preset": {
+      "merge_radius": 3.0,
+      "support_radius": 8.0,
+      "score_threshold": 0.81
+    },
+    "rescoring_feature_columns": [
+      "filtered_peak",
+      "net_intensity_mean",
+      "net_intensity_peak",
+      "net_intensity_p90",
+      "raw_signal_peak",
+      "raw_signal_mean",
+      "raw_background_median",
+      "source_baseline",
+      "source_bgsub",
+      "branch_agreement",
+      "base_filtered_peak",
+      "base_net_intensity_p90",
+      "base_net_intensity_mean",
+      "bgsub_filtered_peak",
+      "bgsub_net_intensity_p90",
+      "bgsub_net_intensity_mean",
+      "base_prev_support",
+      "base_next_support",
+      "bg_prev_support",
+      "bg_next_support",
+      "temporal_support_sum",
+      "temporal_support_any"
+    ]
+  },
+  "selection_metric": "balanced",
+  "measurement_params": {
+    "signal_radius": 4,
+    "background_radius": 9
+  },
+  "tracking_params": {
+    "max_distance": 10.0,
+    "max_gap": 3,
+    "min_track_length": 1
+  },
+  "recovery_params": {
+    "enabled": true,
+    "threshold_margin": 1.0,
+    "p90_margin": 5.0,
+    "mean_margin": 3.0,
+    "same_frame_radius": 2.0,
+    "temporal_radius": 10.0
+  },
+  "intensity_thresholds": {
+    "low_threshold": 42.60000000000002,
+    "high_threshold": 52.400000000000006
+  },
+  "detections_total": 7612,
+  "tracks_total": 580,
+  "evaluation": null,
+  "qc": {
+    "overlay_video": "/Users/tmwo0dsvert3/Desktop/Point_mark/napari_marking/mlops/output/input/qc/qc_overlay.mp4",
+    "problem_frames_csv": null,
+    "top_problem_frames": []
+  }
+}

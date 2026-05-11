@@ -1,0 +1,4 @@
+branch_name,branch_label,small_sigma,big_sigma,threshold_abs,min_distance,min_net_intensity_p90,min_net_intensity_mean
+baseline_bandpass,Baseline bandpass,1.2,11.0,20.5,5,31.0,9.0
+background_subtracted,Local background subtraction,1.2,9.0,20.0,5,27.0,9.0
+temporal_median_bandpass,Temporal median + bandpass,1.0,11.0,19.5,5,27.0,9.0

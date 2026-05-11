@@ -1,0 +1,10 @@
+services:
+  droplet-cv:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: droplet-cv:latest
+    volumes:
+      - ./mlops/input:/app/mlops/input
+      - ./mlops/output:/app/mlops/output
+    command: ["--mode", "balanced"]

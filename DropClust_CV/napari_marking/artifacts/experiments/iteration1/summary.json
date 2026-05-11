@@ -1,0 +1,9 @@
+{
+  "best_holdout_branch": "baseline_bandpass",
+  "best_holdout_metrics": {
+    "precision": 0.8857958600999286,
+    "recall": 0.8494182067077344,
+    "f1": 0.86722571628232,
+    "count_mae": 6.5
+  }
+}

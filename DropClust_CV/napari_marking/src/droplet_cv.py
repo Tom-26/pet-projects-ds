@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import linear_sum_assignment
+from scipy.special import expit
 from scipy.spatial.distance import cdist
 from skimage.feature import peak_local_max
 
@@ -26,8 +27,8 @@ class DetectorParams:
     big_sigma: float = 11.0
     threshold_abs: float = 20.5
     min_distance: int = 5
-    min_net_intensity_p90: float = 29.0
-    min_net_intensity_mean: float = 11.0
+    min_net_intensity_p90: float = 31.0
+    min_net_intensity_mean: float = 9.0
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,181 @@ class RecoveryParams:
     mean_margin: float = 3.0
     same_frame_radius: float = 2.0
     temporal_radius: float = 10.0
+
+
+@dataclass(frozen=True)
+class EnsembleParams:
+    same_frame_match_radius: float = 5.0
+    temporal_support_radius: float = 8.0
+    min_bgsub_p90: float = 27.0
+
+
+@dataclass(frozen=True)
+class HighRecallUnionParams:
+    same_frame_match_radius: float = 3.0
+
+
+@dataclass(frozen=True)
+class RescoringPreset:
+    merge_radius: float = 3.0
+    support_radius: float = 8.0
+    score_threshold: float = 0.81
+
+
+RESCORING_FEATURE_COLUMNS = [
+    "filtered_peak",
+    "net_intensity_mean",
+    "net_intensity_peak",
+    "net_intensity_p90",
+    "raw_signal_peak",
+    "raw_signal_mean",
+    "raw_background_median",
+    "source_baseline",
+    "source_bgsub",
+    "branch_agreement",
+    "base_filtered_peak",
+    "base_net_intensity_p90",
+    "base_net_intensity_mean",
+    "bgsub_filtered_peak",
+    "bgsub_net_intensity_p90",
+    "bgsub_net_intensity_mean",
+    "base_prev_support",
+    "base_next_support",
+    "bg_prev_support",
+    "bg_next_support",
+    "temporal_support_sum",
+    "temporal_support_any",
+]
+
+RESCORING_WEIGHTS = np.array([
+    0.32863134789588383,
+    0.3999098156158762,
+    0.07942617450522561,
+    0.2834246689183914,
+    0.11054340522134887,
+    0.4410499393101003,
+    0.18905460692129536,
+    0.14983162110280537,
+    -0.12415711656115769,
+    0.11986245453784172,
+    0.3091682438318731,
+    0.17033388770683705,
+    0.30263557666885915,
+    0.33419029615037055,
+    0.25939835294545477,
+    0.3852160333681854,
+    -0.04627843115047912,
+    -0.21101270257008345,
+    -0.003437106503139731,
+    0.3418336579216527,
+    0.02455699509149081,
+    -0.16197687198849173,
+    4.446177615226318,
+], dtype=float)
+
+RESCORING_FEATURE_MEAN = np.array([
+    36.24820463487203,
+    20.466359992024056,
+    75.87923576063446,
+    51.247656813266055,
+    191.13121845710165,
+    135.71834268849125,
+    115.2519826964672,
+    0.886085075702956,
+    0.9949531362653208,
+    0.8810382119682768,
+    33.40726057298766,
+    47.272458543619315,
+    19.302040867064076,
+    35.95583782182293,
+    51.04491708723866,
+    20.395071202535657,
+    0.48954578226387885,
+    0.48954578226387885,
+    0.5263157894736842,
+    0.5270367700072098,
+    2.0324441240086517,
+    0.6834895457822638,
+], dtype=float)
+
+RESCORING_FEATURE_STD = np.array([
+    16.204948537033264,
+    10.39100047915815,
+    22.599783098504012,
+    17.982757099758068,
+    22.872710025449468,
+    11.084631436575073,
+    3.879370879319385,
+    0.3177079072346843,
+    0.07086178731250534,
+    0.3237435420514493,
+    19.635725668625934,
+    23.97770996742949,
+    11.92620128115852,
+    16.105732632389397,
+    18.319666717921116,
+    10.467774902549895,
+    0.4998906973844639,
+    0.49989069738446384,
+    0.49930699897395464,
+    0.49926847794305745,
+    1.642430368631685,
+    0.4651145951146001,
+], dtype=float)
+
+
+def preset_baseline_params() -> DetectorParams:
+    return DetectorParams(
+        small_sigma=1.2,
+        big_sigma=11.0,
+        threshold_abs=20.5,
+        min_distance=5,
+        min_net_intensity_p90=31.0,
+        min_net_intensity_mean=9.0,
+    )
+
+
+def preset_bgsub_params() -> DetectorParams:
+    return DetectorParams(
+        small_sigma=1.2,
+        big_sigma=9.0,
+        threshold_abs=20.0,
+        min_distance=5,
+        min_net_intensity_p90=27.0,
+        min_net_intensity_mean=9.0,
+    )
+
+
+def build_annotation_blocks(annotations: dict[int, np.ndarray]) -> list[list[int]]:
+    frames = sorted(annotations)
+    if not frames:
+        return []
+
+    blocks = [[frames[0]]]
+    for frame_id in frames[1:]:
+        if frame_id - blocks[-1][-1] <= 1:
+            blocks[-1].append(frame_id)
+        else:
+            blocks.append([frame_id])
+    return blocks
+
+
+def make_temporal_holdout_split(
+    annotations: dict[int, np.ndarray],
+    holdout_block_offset: int = 1,
+) -> dict[str, object]:
+    blocks = build_annotation_blocks(annotations)
+    train_blocks = [block for idx, block in enumerate(blocks) if idx % 2 != holdout_block_offset % 2]
+    holdout_blocks = [block for idx, block in enumerate(blocks) if idx % 2 == holdout_block_offset % 2]
+    train_frames = [frame_id for block in train_blocks for frame_id in block]
+    holdout_frames = [frame_id for block in holdout_blocks for frame_id in block]
+    return {
+        "blocks": blocks,
+        "train_blocks": train_blocks,
+        "holdout_blocks": holdout_blocks,
+        "train_frames": train_frames,
+        "holdout_frames": holdout_frames,
+    }
 
 
 def load_video_grayscale(video_path: Path) -> tuple[np.ndarray, float]:
@@ -98,6 +274,64 @@ def bandpass_filter_video(
     small_blur = gaussian_filter(frames_float, sigma=(0, small_sigma, small_sigma))
     big_blur = gaussian_filter(frames_float, sigma=(0, big_sigma, big_sigma))
     return np.clip(small_blur - big_blur, a_min=0.0, a_max=None)
+
+
+def local_background_subtraction_video(
+    frames: np.ndarray,
+    small_sigma: float,
+    big_sigma: float,
+) -> np.ndarray:
+    frames_float = frames.astype(np.float32)
+    background = gaussian_filter(frames_float, sigma=(0, big_sigma, big_sigma))
+    corrected = np.clip(frames_float - background, a_min=0.0, a_max=None)
+    return gaussian_filter(corrected, sigma=(0, small_sigma, small_sigma))
+
+
+def temporal_median_filter_video(
+    frames: np.ndarray,
+    window_size: int = 3,
+) -> np.ndarray:
+    if window_size <= 1:
+        return frames.astype(np.float32)
+
+    half_window = window_size // 2
+    padded = np.pad(
+        frames.astype(np.float32),
+        ((half_window, half_window), (0, 0), (0, 0)),
+        mode="edge",
+    )
+    filtered = []
+    for frame_id in range(len(frames)):
+        stack = padded[frame_id : frame_id + window_size]
+        filtered.append(np.median(stack, axis=0))
+    return np.stack(filtered, axis=0)
+
+
+def make_response_video(
+    raw_frames: np.ndarray,
+    detector_params: DetectorParams,
+    branch_name: str = "baseline_bandpass",
+) -> np.ndarray:
+    if branch_name == "baseline_bandpass":
+        return bandpass_filter_video(
+            raw_frames,
+            small_sigma=detector_params.small_sigma,
+            big_sigma=detector_params.big_sigma,
+        )
+    if branch_name == "background_subtracted":
+        return local_background_subtraction_video(
+            raw_frames,
+            small_sigma=detector_params.small_sigma,
+            big_sigma=detector_params.big_sigma,
+        )
+    if branch_name == "temporal_median_bandpass":
+        temporally_smoothed = temporal_median_filter_video(raw_frames, window_size=3)
+        return bandpass_filter_video(
+            temporally_smoothed,
+            small_sigma=detector_params.small_sigma,
+            big_sigma=detector_params.big_sigma,
+        )
+    raise ValueError(f"Unknown branch_name: {branch_name}")
 
 
 def detect_frame_peaks(filtered_frame: np.ndarray, params: DetectorParams) -> np.ndarray:
@@ -195,12 +429,17 @@ def detect_video(
     measurement_params: MeasurementParams,
     frame_indices: list[int] | None = None,
     apply_filters: bool = True,
+    branch_name: str = "baseline_bandpass",
+    response_frames: np.ndarray | None = None,
 ) -> tuple[pd.DataFrame, np.ndarray]:
-    filtered_frames = bandpass_filter_video(
-        raw_frames,
-        small_sigma=detector_params.small_sigma,
-        big_sigma=detector_params.big_sigma,
-    )
+    if response_frames is None:
+        filtered_frames = make_response_video(
+            raw_frames=raw_frames,
+            detector_params=detector_params,
+            branch_name=branch_name,
+        )
+    else:
+        filtered_frames = response_frames
 
     target_frames = frame_indices if frame_indices is not None else list(range(len(raw_frames)))
     rows: list[dict[str, float | int]] = []
@@ -248,6 +487,7 @@ def recover_temporal_candidates(
     detector_params: DetectorParams,
     measurement_params: MeasurementParams,
     recovery_params: RecoveryParams,
+    branch_name: str = "baseline_bandpass",
 ) -> pd.DataFrame:
     if not recovery_params.enabled:
         return strong_detections
@@ -266,6 +506,7 @@ def recover_temporal_candidates(
         raw_frames=raw_frames,
         detector_params=weak_params,
         measurement_params=measurement_params,
+        branch_name=branch_name,
     )
 
     strong_by_frame = {
@@ -328,6 +569,310 @@ def recover_temporal_candidates(
     merged = pd.concat([strong_detections, recovered], ignore_index=True)
     merged = merged.sort_values(["frame", "y", "x"]).reset_index(drop=True)
     return merged
+
+
+def point_array(df: pd.DataFrame) -> np.ndarray:
+    if df.empty:
+        return np.empty((0, 2), dtype=float)
+    return df[["y", "x"]].to_numpy(dtype=float)
+
+
+def min_dist(point: np.ndarray, points: np.ndarray) -> float:
+    if len(points) == 0:
+        return float("inf")
+    return float(np.sqrt(np.sum((points - point) ** 2, axis=1)).min())
+
+
+def build_branch_detections(
+    raw_frames: np.ndarray,
+    measurement_params: MeasurementParams,
+    recovery_params: RecoveryParams,
+    detector_params: DetectorParams,
+    branch_name: str,
+    frame_indices: list[int] | None = None,
+) -> pd.DataFrame:
+    detections, _ = detect_video(
+        raw_frames=raw_frames,
+        detector_params=detector_params,
+        measurement_params=measurement_params,
+        frame_indices=frame_indices,
+        branch_name=branch_name,
+    )
+    detections = recover_temporal_candidates(
+        raw_frames=raw_frames,
+        strong_detections=detections,
+        detector_params=detector_params,
+        measurement_params=measurement_params,
+        recovery_params=recovery_params,
+        branch_name=branch_name,
+    )
+    if frame_indices is None:
+        return detections.reset_index(drop=True)
+    return detections[detections["frame"].isin(frame_indices)].reset_index(drop=True)
+
+
+def ensemble_fuse_high_recall_union(
+    baseline_detections: pd.DataFrame,
+    bgsub_detections: pd.DataFrame,
+    union_params: HighRecallUnionParams,
+) -> pd.DataFrame:
+    baseline_by_frame = {
+        int(frame_id): group.reset_index(drop=True)
+        for frame_id, group in baseline_detections.groupby("frame")
+    }
+    bgsub_by_frame = {
+        int(frame_id): group.reset_index(drop=True)
+        for frame_id, group in bgsub_detections.groupby("frame")
+    }
+
+    fused_rows = []
+    frame_ids = sorted(set(baseline_by_frame).union(bgsub_by_frame))
+    for frame_id in frame_ids:
+        baseline_frame = baseline_by_frame.get(frame_id, pd.DataFrame())
+        bgsub_frame = bgsub_by_frame.get(frame_id, pd.DataFrame())
+        baseline_points = point_array(baseline_frame)
+
+        for _, row in baseline_frame.iterrows():
+            fused = row.to_dict()
+            fused["source_branch"] = "baseline"
+            fused_rows.append(fused)
+
+        for _, row in bgsub_frame.iterrows():
+            point = np.array([float(row["y"]), float(row["x"])], dtype=float)
+            if min_dist(point, baseline_points) <= union_params.same_frame_match_radius:
+                continue
+            fused = row.to_dict()
+            fused["source_branch"] = "bgsub_union"
+            fused_rows.append(fused)
+
+    if not fused_rows:
+        return baseline_detections.copy()
+    return pd.DataFrame(fused_rows).sort_values(["frame", "y", "x"]).reset_index(drop=True)
+
+
+def merge_branch_candidates(
+    baseline_detections: pd.DataFrame,
+    bgsub_detections: pd.DataFrame,
+    merge_radius: float,
+) -> pd.DataFrame:
+    rows = []
+    baseline_by_frame = {
+        int(frame_id): group.reset_index(drop=True)
+        for frame_id, group in baseline_detections.groupby("frame")
+    }
+    bgsub_by_frame = {
+        int(frame_id): group.reset_index(drop=True)
+        for frame_id, group in bgsub_detections.groupby("frame")
+    }
+
+    frame_ids = sorted(set(baseline_by_frame).union(bgsub_by_frame))
+    for frame_id in frame_ids:
+        candidates: list[dict[str, float | int]] = []
+        assigned_bgsub = set()
+        baseline_frame = baseline_by_frame.get(frame_id, pd.DataFrame())
+        bgsub_frame = bgsub_by_frame.get(frame_id, pd.DataFrame())
+
+        for _, row in baseline_frame.iterrows():
+            candidate = row.to_dict()
+            candidate["source_baseline"] = 1
+            candidate["source_bgsub"] = 0
+            candidate["branch_agreement"] = 0
+            candidate["bgsub_filtered_peak"] = 0.0
+            candidate["bgsub_net_intensity_p90"] = 0.0
+            candidate["bgsub_net_intensity_mean"] = 0.0
+            candidate["base_filtered_peak"] = float(row["filtered_peak"])
+            candidate["base_net_intensity_p90"] = float(row["net_intensity_p90"])
+            candidate["base_net_intensity_mean"] = float(row["net_intensity_mean"])
+
+            best_idx = None
+            best_distance = float("inf")
+            for bg_idx, bg_row in bgsub_frame.iterrows():
+                if bg_idx in assigned_bgsub:
+                    continue
+                dist = float(np.hypot(float(row["y"]) - float(bg_row["y"]), float(row["x"]) - float(bg_row["x"])))
+                if dist <= merge_radius and dist < best_distance:
+                    best_distance = dist
+                    best_idx = bg_idx
+
+            if best_idx is not None:
+                assigned_bgsub.add(best_idx)
+                bg_row = bgsub_frame.loc[best_idx]
+                candidate["source_bgsub"] = 1
+                candidate["branch_agreement"] = 1
+                candidate["bgsub_filtered_peak"] = float(bg_row["filtered_peak"])
+                candidate["bgsub_net_intensity_p90"] = float(bg_row["net_intensity_p90"])
+                candidate["bgsub_net_intensity_mean"] = float(bg_row["net_intensity_mean"])
+                if float(bg_row["filtered_peak"]) > float(row["filtered_peak"]):
+                    candidate["y"] = float(bg_row["y"])
+                    candidate["x"] = float(bg_row["x"])
+                    candidate["filtered_peak"] = float(bg_row["filtered_peak"])
+                    candidate["net_intensity_mean"] = float(bg_row["net_intensity_mean"])
+                    candidate["net_intensity_peak"] = float(bg_row["net_intensity_peak"])
+                    candidate["net_intensity_p90"] = float(bg_row["net_intensity_p90"])
+                    candidate["raw_signal_mean"] = float(bg_row["raw_signal_mean"])
+                    candidate["raw_signal_peak"] = float(bg_row["raw_signal_peak"])
+                    candidate["raw_signal_p90"] = float(bg_row["raw_signal_p90"])
+                    candidate["raw_background_median"] = float(bg_row["raw_background_median"])
+
+            candidates.append(candidate)
+
+        for bg_idx, bg_row in bgsub_frame.iterrows():
+            if bg_idx in assigned_bgsub:
+                continue
+            candidate = bg_row.to_dict()
+            candidate["source_baseline"] = 0
+            candidate["source_bgsub"] = 1
+            candidate["branch_agreement"] = 0
+            candidate["base_filtered_peak"] = 0.0
+            candidate["base_net_intensity_p90"] = 0.0
+            candidate["base_net_intensity_mean"] = 0.0
+            candidate["bgsub_filtered_peak"] = float(bg_row["filtered_peak"])
+            candidate["bgsub_net_intensity_p90"] = float(bg_row["net_intensity_p90"])
+            candidate["bgsub_net_intensity_mean"] = float(bg_row["net_intensity_mean"])
+            candidates.append(candidate)
+
+        for idx, candidate in enumerate(candidates):
+            candidate["candidate_id"] = int(idx)
+            candidate["frame"] = int(frame_id)
+            rows.append(candidate)
+
+    return pd.DataFrame(rows).sort_values(["frame", "y", "x"]).reset_index(drop=True)
+
+
+def add_temporal_support_features(candidates: pd.DataFrame, support_radius: float) -> pd.DataFrame:
+    enriched = candidates.copy()
+    by_frame = {
+        int(frame_id): group.reset_index(drop=True)
+        for frame_id, group in enriched.groupby("frame")
+    }
+    base_by_frame = {
+        int(frame_id): point_array(group[group["source_baseline"] == 1])
+        for frame_id, group in by_frame.items()
+    }
+    bg_by_frame = {
+        int(frame_id): point_array(group[group["source_bgsub"] == 1])
+        for frame_id, group in by_frame.items()
+    }
+
+    rows = []
+    for frame_id, frame_group in by_frame.items():
+        prev_base = base_by_frame.get(frame_id - 1, np.empty((0, 2)))
+        next_base = base_by_frame.get(frame_id + 1, np.empty((0, 2)))
+        prev_bg = bg_by_frame.get(frame_id - 1, np.empty((0, 2)))
+        next_bg = bg_by_frame.get(frame_id + 1, np.empty((0, 2)))
+
+        for _, row in frame_group.iterrows():
+            point = np.array([float(row["y"]), float(row["x"])], dtype=float)
+            out = row.to_dict()
+            out["base_prev_support"] = float(min_dist(point, prev_base) <= support_radius)
+            out["base_next_support"] = float(min_dist(point, next_base) <= support_radius)
+            out["bg_prev_support"] = float(min_dist(point, prev_bg) <= support_radius)
+            out["bg_next_support"] = float(min_dist(point, next_bg) <= support_radius)
+            out["temporal_support_sum"] = (
+                out["base_prev_support"] + out["base_next_support"] + out["bg_prev_support"] + out["bg_next_support"]
+            )
+            out["temporal_support_any"] = float(out["temporal_support_sum"] > 0)
+            rows.append(out)
+
+    return pd.DataFrame(rows).sort_values(["frame", "y", "x"]).reset_index(drop=True)
+
+
+def apply_rescoring_preset(
+    baseline_detections: pd.DataFrame,
+    bgsub_detections: pd.DataFrame,
+    rescoring_preset: RescoringPreset,
+) -> pd.DataFrame:
+    candidates = merge_branch_candidates(
+        baseline_detections=baseline_detections,
+        bgsub_detections=bgsub_detections,
+        merge_radius=rescoring_preset.merge_radius,
+    )
+    candidates = add_temporal_support_features(
+        candidates=candidates,
+        support_radius=rescoring_preset.support_radius,
+    )
+    x = candidates[RESCORING_FEATURE_COLUMNS].to_numpy(dtype=float)
+    x_std = (x - RESCORING_FEATURE_MEAN) / RESCORING_FEATURE_STD
+    logits = np.hstack([x_std, np.ones((len(x_std), 1), dtype=float)]) @ RESCORING_WEIGHTS
+    scores = expit(logits)
+    scored = candidates.copy()
+    scored["rescoring_score"] = scores
+    kept = scored[scored["rescoring_score"] >= rescoring_preset.score_threshold].copy()
+    return kept.sort_values(["frame", "y", "x"]).reset_index(drop=True)
+
+
+def generate_mode_detections(
+    raw_frames: np.ndarray,
+    measurement_params: MeasurementParams,
+    recovery_params: RecoveryParams,
+    mode: str,
+    frame_indices: list[int] | None = None,
+    baseline_params: DetectorParams | None = None,
+) -> tuple[pd.DataFrame, dict[str, object]]:
+    baseline_params = baseline_params or preset_baseline_params()
+    bgsub_params = preset_bgsub_params()
+
+    if mode == "baseline":
+        detections = build_branch_detections(
+            raw_frames=raw_frames,
+            measurement_params=measurement_params,
+            recovery_params=recovery_params,
+            detector_params=baseline_params,
+            branch_name="baseline_bandpass",
+            frame_indices=frame_indices,
+        )
+        return detections, {
+            "mode": mode,
+            "baseline_params": asdict(baseline_params),
+        }
+
+    baseline_detections = build_branch_detections(
+        raw_frames=raw_frames,
+        measurement_params=measurement_params,
+        recovery_params=recovery_params,
+        detector_params=baseline_params,
+        branch_name="baseline_bandpass",
+        frame_indices=frame_indices,
+    )
+    bgsub_detections = build_branch_detections(
+        raw_frames=raw_frames,
+        measurement_params=measurement_params,
+        recovery_params=recovery_params,
+        detector_params=bgsub_params,
+        branch_name="background_subtracted",
+        frame_indices=frame_indices,
+    )
+
+    if mode == "high-recall":
+        union_params = HighRecallUnionParams()
+        detections = ensemble_fuse_high_recall_union(
+            baseline_detections=baseline_detections,
+            bgsub_detections=bgsub_detections,
+            union_params=union_params,
+        )
+        return detections, {
+            "mode": mode,
+            "baseline_params": asdict(baseline_params),
+            "background_subtracted_params": asdict(bgsub_params),
+            "high_recall_union_params": asdict(union_params),
+        }
+
+    if mode == "balanced":
+        rescoring_preset = RescoringPreset()
+        detections = apply_rescoring_preset(
+            baseline_detections=baseline_detections,
+            bgsub_detections=bgsub_detections,
+            rescoring_preset=rescoring_preset,
+        )
+        return detections, {
+            "mode": mode,
+            "baseline_params": asdict(baseline_params),
+            "background_subtracted_params": asdict(bgsub_params),
+            "rescoring_preset": asdict(rescoring_preset),
+            "rescoring_feature_columns": RESCORING_FEATURE_COLUMNS,
+        }
+
+    raise ValueError(f"Unknown mode: {mode}")
 
 
 def match_points(
@@ -472,6 +1017,7 @@ def tune_detector(
     net_p90_thresholds: list[float],
     net_mean_thresholds: list[float],
     tolerance: float,
+    branch_name: str = "baseline_bandpass",
 ) -> tuple[DetectorParams, pd.DataFrame]:
     frame_indices = sorted(annotations)
     if not frame_indices:
@@ -500,6 +1046,7 @@ def tune_detector(
             measurement_params=measurement_params,
             frame_indices=frame_indices,
             apply_filters=False,
+            branch_name=branch_name,
         )
         candidate_cache[(small_sigma, big_sigma, threshold_abs, min_distance)] = candidates
 
@@ -1053,6 +1600,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--video", type=Path, default=DEFAULT_VIDEO_PATH)
     parser.add_argument("--annotations", type=Path, default=DEFAULT_ANNOTATIONS_PATH)
+    parser.add_argument("--no-annotations", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_ARTIFACTS_DIR)
     parser.add_argument("--tolerance", type=float, default=6.0)
 
@@ -1065,6 +1613,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--selection-metric",
         choices=["balanced", "f1", "count_mae"],
+        default="balanced",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["balanced", "high-recall", "baseline"],
         default="balanced",
     )
 
@@ -1092,7 +1645,7 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     video_path = resolve_project_path(args.video)
-    annotations_path = resolve_project_path(args.annotations)
+    annotations_path = None if args.no_annotations else resolve_project_path(args.annotations)
     output_dir = resolve_project_path(args.output_dir)
     tables_dir = output_dir / "tables"
     qc_dir = output_dir / "qc"
@@ -1122,10 +1675,10 @@ def main() -> None:
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     annotations: dict[int, np.ndarray] = {}
-    if annotations_path.exists():
+    if annotations_path is not None and annotations_path.exists():
         annotations = load_annotations(annotations_path)
 
-    if annotations and not args.skip_tuning:
+    if args.mode == "baseline" and annotations and not args.skip_tuning:
         _, tuning_results = tune_detector(
             raw_frames=raw_frames,
             annotations=annotations,
@@ -1144,20 +1697,15 @@ def main() -> None:
         )
         tuning_results.to_csv(tables_dir / "tuning_results.csv", index=False)
     else:
-        best_params = DetectorParams()
+        best_params = preset_baseline_params()
         tuning_results = None
 
-    detections, _ = detect_video(
+    detections, mode_details = generate_mode_detections(
         raw_frames=raw_frames,
-        detector_params=best_params,
-        measurement_params=measurement_params,
-    )
-    detections = recover_temporal_candidates(
-        raw_frames=raw_frames,
-        strong_detections=detections,
-        detector_params=best_params,
         measurement_params=measurement_params,
         recovery_params=recovery_params,
+        mode=args.mode,
+        baseline_params=best_params,
     )
 
     evaluation_metrics = None
@@ -1221,7 +1769,9 @@ def main() -> None:
         "video": str(video_path),
         "fps": fps,
         "frame_count": int(raw_frames.shape[0]),
+        "mode": args.mode,
         "detector_params": asdict(best_params),
+        "mode_details": mode_details,
         "selection_metric": args.selection_metric,
         "measurement_params": asdict(measurement_params),
         "tracking_params": asdict(tracking_params),
